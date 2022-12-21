@@ -1,0 +1,165 @@
+#GOV UK FM Strategy
+
+# Packages
+
+library(tm)
+library(topicmodels)
+library(textdata)
+library(rvest)
+library(tidyverse) 
+library(tidytext)
+library(dplyr)
+library(tidyr)   
+library(reshape2)
+library(forcats)
+library(scales)
+library(stringr)
+library(ggplot2)
+library (ggplot)
+library(wordcloud)
+library(igraph)
+library(ggraph)
+library(antiword)
+library(syuzhet)
+library(RColorBrewer)
+library(wordcloud2)
+
+
+# Web Scraping do site do FM GOV
+#UK - Facilities Management Strategy (HTML)
+
+artigo_UK <- read_html("https://www.gov.uk/government/publications/facilities-management-strategy/facilities-management-strategy-html")
+class(artigo_UK)
+View(artigo_UK)
+
+texto_artigo_UK <- artigo_UK%>%
+  html_nodes("p") %>%
+  html_text()
+
+# Obtendo o título do artigo
+
+titulo_artigo_UK <- artigo_UK %>%
+  html_nodes("title") %>%
+  html_text()
+
+########## Preparação dos Dados ##########
+
+# Vamos criar um dataframe para o texto de cada artigo
+
+df_UK <- data.frame(line = 1, text = texto_artigo_UK, stringsAsFactors = FALSE)
+class(df_UK)
+View(df_UK)
+
+
+########## Processamento de Linguagem Natural ##########
+
+# Tokenização
+
+tokens_UK <- df_UK %>%
+  unnest_tokens(word, text) %>%
+  anti_join(stop_words) %>%
+  count(word, sort = TRUE)
+View(tokens_UK)
+
+# Histogramas de Frequência
+
+# Vamos verificar quais palavras aparecem com mais frequência
+
+hist_UK <- df_UK %>%
+  unnest_tokens(word, text) %>%
+  anti_join(stop_words) %>%
+  count(word, sort = TRUE) %>%
+  filter(n > 15) %>% 
+  mutate(word = reorder(word, n)) %>%
+  ggplot(aes(word, n)) +
+  geom_col() +
+  xlab(NULL) +
+  coord_flip()
+print(hist_UK + ggtitle("Facilities Management Strategy"))
+
+
+# Calculamos a frequência
+
+frequencia <- bind_rows(mutate(UK_clean, author = "GOVUK")) %>%
+  mutate(word = str_extract(word, "[a-z']+")) %>%
+  count(author, word) %>%
+  group_by(author) %>%
+  mutate(proportion = n/sum(n))%>%
+  select(-n) %>%
+  spread(author, proportion) %>%
+  gather(author, proportion, `GOVUK`,`STA1`,`STA2`)
+print(frequencia)
+
+#wordcloud
+
+text<- df_UK
+docs<- Corpus(VectorSource(text))
+gsub("https\\S*", "", tweets$text) 
+gsub("@\\S*", "", tweets$text) 
+gsub("amp", "", tweets$text) 
+gsub("[\r\n]", "", tweets$text)
+gsub("[[:punct:]]", "", data$text)
+docs <- docs %>%
+  tm_map(removeNumbers) %>%
+  tm_map(removePunctuation) %>%
+  tm_map(stripWhitespace)
+docs <- tm_map(docs, content_transformer(tolower))
+docs <- tm_map(docs, removeWords, stopwords("english"))
+dtm <- TermDocumentMatrix(docs) 
+matrix <- as.matrix(dtm) 
+words <- sort(rowSums(matrix),decreasing=TRUE) 
+df <- data.frame(word = names(words),freq=words)
+tweets_words <-  tweets %>%
+  select(text) %>%
+  unnest_tokens(word, text)
+words <- tweets_words %>% count(word, sort=TRUE)
+wordcloud(words = df$word, freq = df$freq, min.freq = 1,max.words=200, random.order=FALSE, rot.per=0.35,colors=brewer.pal(8, "Dark2"))
+
+###############sentiments analysis####################
+
+texto <- scan (file = "https://www.gov.uk/government/publications/facilities-management-strategy/facilities-management-strategy-html", fileEncoding = "UTF-8", what = character(), sep = "\n", allowEscapes = T)
+texto_palavras <- get_tokens(texto)
+head(texto_palavras)
+class (texto_palavras)
+
+length(texto_palavras)
+
+oracoes_vetor <- get_sentences(texto)
+length(oracoes_vetor)
+
+sentimentos_df <- get_nrc_sentiment(texto_palavras, lang="english")
+
+head(sentimentos_df)
+
+summary(sentimentos_df)
+
+
+barplot(colSums(prop.table(sentimentos_df[, 1:8])))
+
+nuvem_emocoes_vetor <- c(
+  paste(texto_palavras[sentimentos_df$sadness> 0], collapse = " "),
+  paste(texto_palavras[sentimentos_df$joy > 0], collapse = " "),
+  paste(texto_palavras[sentimentos_df$anger > 0], collapse = " "),
+  paste(texto_palavras[sentimentos_df$fear > 0], collapse = " "))
+nuvem_emocoes_vetor <- iconv(nuvem_emocoes_vetor, "latin1", "UTF-8")
+
+nuvem_corpus <- Corpus(VectorSource(nuvem_emocoes_vetor))
+
+nuvem_tdm <- TermDocumentMatrix(nuvem_corpus)
+nuvem_tdm <- as.matrix(nuvem_tdm)
+head(nuvem_tdm)
+
+colnames(nuvem_tdm) <- c('antecipation', 'fear', 'joy', 'trust')
+head(nuvem_tdm)
+
+set.seed(757)
+comparison.cloud(nuvem_tdm, random.order = FALSE,
+                 colors = c("green", "red", "orange", "blue"),
+                 title.size = 1, max.words = 50, scale = c(2.5, 1), rot.per = 0.4)
+
+sentimentos_valencia <- (sentimentos_df$negative * -1) + sentimentos_df$positive
+
+simple_plot(sentimentos_valencia)
+
+
+#END
